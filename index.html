@@ -40,7 +40,7 @@
     <canvas class="emscripten" id="canvas" width="1024" height="768" oncontextmenu="event.preventDefault()"></canvas>
     <textarea class="emscripten" id="output" rows="5" style="width:600px;left:0px; bottom:0px; display:none;"></textarea>
     <script type='text/javascript'>
-			var files = ["Scene003.vs","Scene055.vs","Scene088.vs","Scene010.vs","Scene004.vs","Scene012.vs","Scene035.vs","Scene043.vs","Scene114.vs","Scene036.vs","Scene102.vs","Scene075.vs","Scene023.vs","Scene039.vs","Scene103.vs","Scene108.vs","Scene009.vs","Scene024.vs","Scene019.vs","Scene097.vs","Scene105.vs","Scene101.vs","Scene005.vs","Scene072.vs","Scene060.vs","Scene109.vs","Scene062.vs","Scene081.vs","Scene028.vs","Scene058.vs","Scene032.vs","Interfaces.vi","Scene029.vs","Scene044.vs","Scene086.vs","Scene085.vs","Scene052.vs","Scene112.vs","Scene027.vs","Scene042.vs","Scene020.vs","Scene002.vs","Scene011.vs","Scene018.vs","Scene041.vs","Scene025.vs","Scene095.vs","Scene026.vs","Scene098.vs","Scene059.vs","Scene047.vs","Scene104.vs","Scene038.vs","Scene014.vs","Scene073.vs","Scene069.vs","Scene001.vs","Scene040.vs","Scene034.vs","Scene079.vs","Scene077.vs","Scene056.vs","Scene074.vs","Scene051.vs","Scene008.vs","Scene045.vs","Scene049.vs","Scene067.vs","Scene048.vs","Scene071.vs","Scene033.vs","Scene030.vs","Scene054.vs","Scene063.vs","Scene065.vs","Scene083.vs","Scene076.vs","Scene015.vs","Scene106.vs","Scene093.vs","Scene031.vs","Scene096.vs","Scene090.vs","Scene013.vs","Scene017.vs","Scene066.vs","Scene094.vs","Scene057.vs","Scene070.vs","Scene113.vs","Scene084.vs","Scene053.vs","Scene007.vs","Scene087.vs","Scene022.vs","Scene050.vs","Scene092.vs","Scene082.vs","Build7.vis","Scene037.vs","Scene091.vs","Scene046.vs","Scene078.vs","Scene016.vs","Scene061.vs","Scene006.vs","Scene080.vs","Scene000.vs","Scene021.vs","Scene068.vs","Scene064.vs","config.ini"                                                                                             
+			var files = ["Character000.vc","Dachlandschaften.vis","Scene002.vs","Scene001.vs","Scene000.vs","config.ini"                                                                                             
 				];
 	  document.getElementById('canvas').width = window.innerWidth;
 	  document.getElementById('canvas').height = window.innerHeight;
@@ -54,6 +54,26 @@
 				if(folder !="")
 					FS.createPath('/', folder, true, true);
 				FS.createPreloadedFile("/" + folder, files[i].split("/").pop(), files[i].replace(" ","%20"), true, false);
+			}
+			if(localStorage.getItem("savedata")!==null && localStorage.getItem("savedata") != "")
+			{
+				FS.createFolder("/", "save", true, true);
+				var obj = JSON.parse(localStorage.getItem("savedata"));
+				for(var i in obj)
+				{
+					if(typeof obj[i] != "object")
+					{
+						FS.writeFile("/save/" + i, base64ToBuffer(obj[i]), {encoding: "binary"});
+					}
+					else
+					{
+						FS.createFolder("/save/", i, true, true);
+						for(var j in obj[i])
+						{
+							FS.writeFile("/save/" + i + "/" + j, base64ToBuffer(obj[i][j]), {encoding: "binary"});
+						}
+					}
+				}
 			}
 		})],
         postRun: [],
@@ -110,10 +130,101 @@
           Module.setStatus(left ? 'Preparing... (' + (this.totalDependencies-left) + '/' + this.totalDependencies + ')' : 'Preparing...');
         }
       };
+	  
+	  function base64ToBuffer(base64) {
+		var binstr = atob(base64);
+		var buf = new Uint8Array(binstr.length);
+		Array.prototype.forEach.call(binstr, function (ch, i) {
+		  buf[i] = ch.charCodeAt(0);
+		});
+		return buf;
+	  }
+	  
+      function arrayToBase64(buf) {
+		var binstr = Array.prototype.map.call(buf, function (ch) {
+			return String.fromCharCode(ch < 0 ? Math.abs(ch) + 127 : ch);
+		}).join('');
+		return btoa(binstr);
+	  }
+	  
+      function bufferToBase64(buf) {
+		var binstr = Array.prototype.map.call(buf, function (ch) {
+			return String.fromCharCode(ch);
+		}).join('');
+		return btoa(binstr);
+	  }
+	  
+	  var lasttimestamp = 0;
+	  function Save()
+	  {
+	  	//alert('save');
+	    var obj = {};
+		for(var i in FS.root.contents.save.contents)
+		{
+			if(i=="messages.log" || i=="config.ini")
+				continue;
+			if(Array.isArray(FS.root.contents.save.contents[i].contents))
+				obj[i] = bufferToBase64(new Uint8Array(FS.root.contents.save.contents[i].contents));
+			else if(FS.root.contents.save.contents[i].contents instanceof Uint8Array)
+				obj[i] = bufferToBase64(FS.root.contents.save.contents[i].contents);
+			else
+			{
+				obj[i] = {};
+				for(var j in FS.root.contents.save.contents[i].contents)
+				{
+					if(Array.isArray(FS.root.contents.save.contents[i].contents[j].contents))
+						obj[i][j] = bufferToBase64(new Uint8Array(FS.root.contents.save.contents[i].contents[j].contents));
+					else if(FS.root.contents.save.contents[i].contents[j].contents instanceof Uint8Array)
+						obj[i][j] = bufferToBase64(FS.root.contents.save.contents[i].contents[j].contents);
+					else
+						alert(j + " nicht gespeichert");
+				}
+			}
+		}
+		localStorage.setItem("savedata",JSON.stringify(obj));
+	  }
+	  function checkSave()
+	  {
+	  	
+		setTimeout(checkSave, 1000);
+		if(FS == undefined || FS.root.contents.save == undefined)
+		{
+			return;
+		}
+		var tstep = 0;
+		for(var i in FS.root.contents.save.contents)
+		{
+			if(i=="messages.log" || i=="config.ini")
+				continue;
+			if(Array.isArray(FS.root.contents.save.contents[i].contents))
+				tstep = Math.max(tstep, FS.root.contents.save.contents[i].timestamp);
+			else if(FS.root.contents.save.contents[i].contents instanceof Uint8Array)
+				tstep = Math.max(tstep, FS.root.contents.save.contents[i].timestamp);
+			else
+			{
+				for(var j in FS.root.contents.save.contents[i].contents)
+				{
+					if(Array.isArray(FS.root.contents.save.contents[i].contents[j].contents))
+						tstep = Math.max(tstep, FS.root.contents.save.contents[i].contents[j].timestamp);
+					else if(FS.root.contents.save.contents[i].contents[j].contents instanceof Uint8Array)
+						tstep = Math.max(tstep, FS.root.contents.save.contents[i].contents[j].timestamp);
+				}
+			}
+		}
+		if(tstep > lasttimestamp)
+		{
+			lasttimestamp = tstep;
+			Save();
+		}
+		
+	  }
+	  setTimeout(checkSave, 1000);
+	  
       Module.setStatus('Downloading...');
     </script>
     <script async type="text/javascript" src="visplayer.js"></script>
   </body>
 </html>
+
 
 
